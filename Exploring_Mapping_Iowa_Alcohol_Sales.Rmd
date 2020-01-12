@@ -11,10 +11,11 @@ The purpose of this exercise was to explore Alcohol Sales data in the State of I
 
 ### Research Questions
 
-1. Item 1
-2. Item 2
-3. Item 3
-4. Item 4
+1. Which counties are the top 10 in sales?
+2. What are the top 10 most valuable products in terms of sales?
+3. What are the most popular liqour brands?
+4. What is the spatial distirubtion of top selling locations of the top 2 selling brands?
+5. Are these stores located near college campuses?
 
 ### Contents
 

@@ -1,0 +1,449 @@
+---
+title: "Exploring and Mapping Iowa Alcohol Sales"
+author: "Dan Larson"
+date: "1/5/2020"
+output: html_document
+---
+
+# Canadian Whiskey in America's Heartland - An Exploring and Mapping Iowa Alcohol Sales
+
+The purpose of this exercise was to explore Alcohol Sales data in the State of Iowa for 2018 to see which brands were most popular, and which stores were selling most of the Top 2 selling brands. Going deeper, I was curious if some of these top performing stores were located near colleges. Some colleges tend to be large consumers of alcohol.
+
+### Research Questions
+
+1. Item 1
+2. Item 2
+3. Item 3
+4. Item 4
+
+### Contents
+
+This report will be organized in the following sections:
+1. Data Cleaning and Pre-Processin
+2. Exploratory Data Analysis (EDA)
+3. Mapping
+
+### Data
+
+Iowa Liquor Sales data was obtained from [Kaggle](http://example.com).
+A more current version of the data can be obtained directly from the [State of Iowa](http://example.com). This will provide more context and explanations of the Metadata.
+
+# 1. Data Cleaning and Pre-Processing
+
+```{r packages, message=FALSE, warning=FALSE}
+# packages --------------------------------------------------------------
+library(tidyverse)
+library(lubridate)
+library(Hmisc)
+```
+
+Bring in the data
+```{r}
+retail_dataimport <- read_csv("./Iowa_Liquor_Sales.csv")
+```
+
+Create a fresh copy of the data so it can be reverted back to easily.
+Get a sense of the variables in the dataset and their structure.
+```{r}
+retail <- retail_dataimport
+
+glimpse(retail)
+
+```
+
+# Cleaning - Check for missing data. 
+
+Identify which columns have missing values and how many.
+
+```{r}
+retail %>% 
+  map(.,~sum(is.na(.)))
+
+#We ignore the entire row(ie observation), if any column has a missing value
+retail <- retail[complete.cases(retail), ]
+
+# Check to see if we have any NA's
+
+retail %>% 
+  map(., ~sum(is.na(.)))
+
+## Boom yes! We have considerably reduced misssing values.
+```
+
+Inspect the dataset
+```{r}
+glimpse(retail)
+```
+
+We need to change Date from "chr" to "mdy". Then change Item_Description, County, Invoice Number, Category Name, to a Factor for analysis. We will also need to make some minor manipulations using `gsub` to remove underscores and slashes in variable names.
+
+```{r}
+#Replace spaces in variable names with underscores.
+names(retail) <- gsub("/", "_", names(retail))
+names(retail) <- gsub(" ", "_", names(retail))
+
+# Also remove the slashes between dates, they make formatting difficult.
+retail$Date <- gsub("/","",retail$Date)
+
+names(retail) <- gsub("[()]", "", names(retail))
+retail$Sale_Dollars <- as.numeric(gsub("\\$", "", retail$Sale_Dollars))
+retail$State_Bottle_Cost <- as.numeric(gsub("\\$", "", retail$State_Bottle_Cost))
+retail$State_Bottle_Retail <- as.numeric(gsub("\\$", "", retail$State_Bottle_Retail))
+
+
+# The last step is to convert county names to uppercase. They were recorded incorrectly with upper and lowercase.
+retail <- retail %>% mutate_each(funs(toupper),County)
+
+# Coerce more variables into factor form
+retail_cleaned <- retail %>%
+  mutate(Date = mdy(Date)) %>% #coerces InvoiceDate in a Date Time format
+  mutate(Item_Description = factor(Item_Description, levels = unique(Item_Description))) %>% 
+#Coerces Description as a factor with each item as individual level of a factor
+  
+  
+  mutate(County = factor(County, levels = unique(County)))%>%
+  mutate(Invoice_Item_Number = factor(Invoice_Item_Number, levels = unique(Invoice_Item_Number))) %>%
+  mutate(Category_Name = factor(Category_Name, levels = unique(Category_Name)))
+
+
+```
+
+Inspect the data again to examine new variables and changed data types.
+```{r}
+glimpse(retail_cleaned)
+```
+
+The data has been satisfactorily cleaned and processed. Save as an `.Rdata` file to make it easy to import for the EDA.
+```{r}
+save(retail_cleaned, file = "retail_cleaned.RData")
+```
+
+# 2. Exploratory Data Analysis (EDA) and Visualization
+
+Now that the data has been cleaned and process let's explore and visualize some of the trends we see in the data. Specifically, we should investigate:
+
+1. Which counties are the top 10 in sales?
+2. What are the top 10 most valuable products in terms of sales?
+3. What are the most popular liquor brands?
+
+
+```{r packages, message=FALSE, warning=FALSE}
+# packages --------------------------------------------------------------
+library(tidyverse)
+library(lubridate)
+library(forcats)
+```
+
+Load the data and inpsect the data. 
+```{r}
+load("./retail_cleaned.RData")
+
+```
+
+## Exploratory Data Analysis (EDA)
+
+Summarize the data according to the counties that have the most sales and identify the Top 10 Best Selling Counties.
+
+```{r}
+# Summarize the data by the counties that have the most sales.
+county_mostsales<-retail_cleaned %>% 
+  group_by(County) %>% 
+  summarize(countywise_sales = sum(Sale_Dollars)/1000000) %>% 
+  arrange(desc(countywise_sales))
+
+## Identify Top 10 Counties
+by_top10_counties <- county_mostsales %>% 
+  top_n(n = 10, wt = countywise_sales)
+```
+
+Visualize the top 10 counties as per total sales.
+```{r}
+by_top10_counties %>% 
+    mutate(County = fct_reorder(County, countywise_sales)) %>% 
+    ggplot(aes(County, countywise_sales))+
+    geom_bar(stat = "identity",fill = "green4")+
+  theme_minimal()+
+  ggtitle('Top 10 Liquor Selling Counties')+
+  coord_flip()+
+  ylab('Total Sales ($M)')+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+So Polk county has the most sales by an order of magnitude. Polk County contains the state capital, Des Moines, and is the most populous
+county in Iowa according to [World Population Review](http://worldpopulationreview.com/us-counties/ia/). Let's remove Polk county and then look at the rest of the data in the top 10 counties.
+
+```{r}
+county_mostsales_without_polk <-  county_mostsales[-1,]  
+  
+by_top10_counties_without_polk <- county_mostsales_without_polk %>% 
+  top_n(n=10, wt = countywise_sales )
+
+by_top10_counties_without_polk %>% 
+  mutate(County = fct_reorder(County, countywise_sales)) %>% 
+  ggplot(aes(County, countywise_sales))+
+  geom_bar(stat = "identity",fill = "green4")+
+  theme_minimal()+
+  ggtitle('Top 10 Liquor Selling Counties')+
+  coord_flip()+
+  ylab('Total Sales ($M)')+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+So without Polk county, Linn county is the second leader in Liquor sales in the state of Iowa with $125M in sales for the reporting period. That is a lot of alcohol!
+
+What are the most valued products? What are the Top 10 most valuable products?
+```{r}
+mostvalued_product <- retail_cleaned %>% 
+  group_by(Item_Description) %>%
+  summarize(value_of_product = sum(Sale_Dollars)/1000000) %>% 
+  arrange(desc(value_of_product)) 
+
+top10_mostvalued_products <- mostvalued_product %>% 
+  top_n(n = 10, wt = value_of_product)
+```
+
+The categorical variables `Item_Description` does not have an inherent order. Reorder it as an increasing count. Visualize Top 10 Best Selling Products.
+
+```{r}
+top10_mostvalued_products %>% 
+  mutate(Item_Description = fct_reorder(Item_Description, value_of_product)) %>% 
+  
+  ggplot(aes(Item_Description, value_of_product))+
+   
+    geom_bar(stat = "identity",fill = "green4")+
+    theme_minimal()+
+    ggtitle('Top 10 Most Popular Products')+
+    coord_flip()+
+    ylab('Total Sales ($M)')+
+    theme(plot.title = element_text(hjust = 0.5))
+```
+
+Interesetingly Canadian Whisky is the most valued Liquor product in America's Heartland. Followed by Jack Daniels, then Captain Morgan.
+
+What are the best selling liquor brands in Iowa? What are the top 10 best brands?
+
+```{r}
+top10_mostsold_brand <- mostsold_brand %>% 
+  top_n(n=10,wt=total_units_sold)
+
+most_sold<- top10_mostsold_brand %>% 
+  mutate(Item_Description = fct_reorder(Item_Description, total_units_sold)) %>% 
+  ggplot(aes(Item_Description, total_units_sold))+
+  geom_bar(stat = "identity",fill = "green4")+
+  theme_minimal()+
+  ggtitle('Top 10 Most Sold Brands')+
+  coord_flip()+
+  ylab('Total Sales ($M)')+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+Black Velvet again. It is the most sold and accounts for the most value followed by Hawkeye Vodka (This seems logical given their passion for college football) and Captain Morgan Spiced Rum.
+
+Which stores sold the most Black Velvet and Hawkeye Vodka? First we must remove empty spaces in `Item_Description` names.
+
+```{r}
+blackvelvet <- retail_cleaned %>% 
+   filter(Item_Description == "Black Velvet") %>% 
+  group_by(Store_Number) %>% 
+  summarize(allSold = sum(Bottles_Sold),
+            totalSales = sum(Sale_Dollars),
+            totalvolGal = sum(Volume_Sold_Gallons)) %>% 
+  arrange(desc(allSold)) %>%
+  top_n(n=10, wt = allSold)
+
+
+```
+
+Use store number for the join.Create data frame just with locations and pertinent summary information.
+
+```{r}
+top10bvstores<- retail_cleaned %>% 
+  select(Store_Number,Store_Name,Address,City,Zip_Code,Store_Location,
+         County_Number,Category_Name,Vendor_Name,Item_Description) %>% 
+  filter(Item_Description == "Black Velvet") %>% 
+  arrange(desc(Store_Number)) %>% 
+  distinct(Store_Number,.keep_all = TRUE)
+  
+bv_most_pop<- top10bvstores %>% 
+  inner_join(blackvelvet,top10bvstores, by = "Store_Number")
+```
+
+Now find way to break out spatial coordinates to store locations. Turn string into data list, then dataframe.
+
+```{r}
+bv_data_clean <- c("7205 MILLS CIVIC PKWY\nWEST DES MOINES 50266\n(41.561342, -93.806489)",
+                  "305 AIRPORT RD\nAMES 50010\n(42.001123, -93.61365)",               
+                  "210 EAST TOWER PARK DR\nWATERLOO 50702\n(42.456362, -92.352552)",
+                  "4201 S. YORK ST.\nSIOUX CITY 51106\n(42.433711, -96.370146)",          
+                  "1101 73RD STREET\nWINDSOR HEIGHTS 50311\n(41.599172, -93.718027)",     
+                  "1610 OKOBOJI AVENUE\nMILFORD 51351\n(43.331525, -95.149955)",          
+                  "2605 BLAIRS FERRY RD NE\nCEDAR RAPIDS 52402\n(42.034737, -91.679406)", 
+                  "1511 2ND AVE NORTH\nFORT DODGE 50501\n(42.508344, -94.177165)",        
+                  "3221 SE 14TH ST\nDES MOINES 50320\n(41.554101, -93.596754)",           
+                  "1201 12TH AVE SW\nLEMARS 51031\n(42.778257, -96.18335)"               
+                  )      
+     
+bv_data_clean <- as.data.frame(bv_data_clean)
+```
+
+Separate out lat and long and bind them to original Black Velvet Top 10 Dataset.Now write it to a .csv. Repeat process for Hawkeye Vodka.
+
+```{r}
+bvdc_latlon <-bv_data_clean%>%
+  mutate(bv_data_clean = gsub('\n', '', bv_data_clean)) %>%
+  extract(bv_data_clean, into = c('address', 'lat', 'lon'), 
+          regex = '(.*)\\((.*),\\s+(.*)\\)', convert = TRUE) %>% 
+          bind_cols(bv_most_pop) %>% 
+          write.csv(.,file = "bvdc_latlon.csv")
+```
+
+Continuing the same process for Hawkeye Vodka
+```{r}
+hawkeye <- retail_cleaned %>% 
+  filter(Item_Description == "Hawkeye Vodka") %>% 
+  group_by(Store_Number) %>% 
+  summarize(allSold = sum(Bottles_Sold),
+            totalSales = sum(Sale_Dollars),
+            totalvolGal = sum(Volume_Sold_Gallons)) %>% 
+  arrange(desc(allSold)) %>%
+  top_n(n=10, wt = allSold)
+
+
+top10hvstores<- retail_cleaned %>% 
+  select(Store_Number,Store_Name,Address,City,Zip_Code,Store_Location,
+         County_Number,Category_Name,Vendor_Name,Item_Description) %>% 
+  filter(Item_Description == "Hawkeye Vodka") %>% 
+  arrange(desc(Store_Number)) %>% 
+  distinct(Store_Number,.keep_all = TRUE)
+
+hv_most_pop<- top10hvstores %>% 
+  inner_join(hawkeye,top10hvstores, by = "Store_Number")
+
+hv_data_clean <- c( "1501 MICHIGAN AVE\nDES MOINES 50314\n(41.605561, -93.613738)",          
+                    "1373 PIERCE ST\nSIOUX CITY 51105\n(42.504732, -96.405013)",             
+                    "507 W 19th St\nSIOUX CITY 51103\n(42.510535, -96.420193)",              
+                    "7205 MILLS CIVIC PKWY\nWEST DES MOINES 50266\n(41.561342, -93.806489)", 
+                    "1101 73RD STREET\nWINDSOR HEIGHTS 50311\n(41.599172, -93.718027)",      
+                    "1511 2ND AVE NORTH\nFORT DODGE 50501\n(42.508344, -94.177165)",         
+                    "3221 SE 14TH ST\nDES MOINES 50320\n(41.554101, -93.596754)",            
+                    "4100 UNIVERSITY AVE\nDES MOINES 50311\n(41.600361, -93.673223)",        
+                    "2001 BLAIRS FERRY ROAD NE\nCEDAR RAPIDS 52402\n(42.034799, -91.668909)",
+                    "551 S ILLINOIS AVE\nMASON CITY 50401\n(43.14623, -93.17114)"           
+                    )
+
+hv_data_clean <- as.data.frame(hv_data_clean)
+
+hvdc_latlon <-hv_data_clean%>%
+  mutate(hv_data_clean = gsub('\n', '', hv_data_clean)) %>%
+  extract(hv_data_clean, into = c('address', 'lat', 'lon'), 
+          regex = '(.*)\\((.*),\\s+(.*)\\)', convert = TRUE) %>% 
+  bind_cols(hv_most_pop) %>% 
+  write.csv(.,file = "hvdc_latlon.csv")
+```
+
+Good. Now both datasets have been exported and can be imported for spatial manipulation in a subsequent analysis.
+
+
+# 3. Mapping Top Selling Liquor Stores by Most Popular Brand
+
+In th previous section we found that Black Velvet and Hawkeye Vodka were the top seling liquor brands in Iowa. It would be interesting to plot the spatial distribution of these stores to see if any illustrative spatial patterns emerge. In addition, we have a hypothesis we would like to test.
+
+# Hypothesis:
+If stores are top sellers of Back Velvet or Hawkeye Vodka, then they will be located near college campuses.
+
+```{r}
+# Install/Load Packages
+library(tidyverse)
+library(leaflet)
+library(leaflet.extras)
+library(htmltools)
+```
+
+# Data -  load data
+In order to do this we must extract data from the IPEDS database containing information on all 4-year colleges within the U.S. The dataset can be found here :[IPEDS](https://nces.ed.gov/ipeds/datacenter/DataFiles.aspx).
+
+```{r}
+ipeds <- read_csv("./Data/IPEDS2018.csv")
+ipeds <- as.data.frame(ipeds)
+# Load in Top Selling stores data from previous exercise
+
+hawkeye <- read_csv("./Data/hvdc_latlon.csv")
+blackvelvet <- read_csv("./Data/bvdc_latlon.csv")
+
+```
+
+Inspect the data
+```{r}
+glimpse(hawkeye)
+glimpse(blackvelvet)
+glimpse(ipeds)
+```
+
+IPEDS contain a lot of data we don't really need. Subset data related to insitution name and location. I filtered for schools in Iowa that were four years or more. I wanted to try to remove community colleges and vocational schools as they are less likely to have a student population 
+residing on or near campus.
+
+## Mapping
+
+Let's start fresh by just plotting colleges first and calling that our base map. First we need to generate some icons for universities. Some pretty neat icons can be found at [Font Awesome](https://fontawesome.com/icons/university?style=light).
+
+```{r}
+college_icons <- awesomeIcons(icon='university',
+                              library = 'fa',
+                              markerColor = 'orange')
+# This is our base map
+map<- leaflet() %>% 
+      addProviderTiles("CartoDB")
+
+# Let's save out one for college to making plotting easier later.
+
+college_map <- map
+```
+
+So now we have our base map. Now let's add the icons we made.The `clusterOptions` argument clusters icons into regions so the map is more readable.
+
+```{r}
+college_map <- college_map %>% 
+
+  addAwesomeMarkers(data=ipeds_iowa,icon =college_icons, 
+                   popup = ~INSTNM,group='Schools',
+                   clusterOptions = markerClusterOptions())
+```
+
+Create a color pallette and plot the map.
+
+```{r}
+pal <- colorFactor(palette = c("blue","red"),
+                   domain = c("Black Velvet", "Hawkeye Vodka"))
+
+#Add markers for Top 10 Black Velvet and Hawkeye Vodka selling stores.
+liquor_collegemap <- college_map %>%
+                    addCircleMarkers(data = blackvelvet,radius = 2,
+                     color= ~pal(Item_Description),
+                     group = "Black Velvet",
+                      label = ~Store_Name) %>% 
+  
+                  addCircleMarkers(data = hawkeye,radius = 2,
+                   color= ~pal(Item_Description),
+                   group = "Hawkeye Vodka",
+                   label = ~Store_Name) %>%
+  
+  #Add the ability to toggle layers on/off to help with visual analysis.
+                  addLayersControl(
+                    overlayGroups = c("Black Velvet",
+                                      "Hawkeye Vodka")) %>% 
+  #Add a legend to the lower right-hand side of the map.
+                  addLegend("bottomright", colors= c("blue", "red"), 
+                    labels=c("Black Velvet", "Hawkeye")) %>% 
+  #Add a measuring tool to inspect distance between stores and schools.
+                    addMeasure()
+            
+```
+
+## Conclusions
+
+From this mapping exercise we can refute our hypothesis that the best selling stores will be near college campuses. It appears the more likely explanation is that the best selling store tend to be located in larger population centers near major roads and receive more customer traffic.
+
+
+
+
+

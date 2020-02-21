@@ -96,15 +96,25 @@ liquor_collegemap <- college_map %>%
                                       "Hawkeye Vodka")) %>% 
                   addLegend("bottomright", colors= c("blue", "red"), 
                     labels=c("Black Velvet", "Hawkeye")) %>% 
-                  addMeasure()
+                  addMeasure() %>%
+                  addSearchFeatures(
+                    targetGroups = 'Schools',
+                    options = searchFeaturesOptions(
+                      zoom=12, openPopup = TRUE, firstTipSubmit = TRUE,
+                      autoCollapse = TRUE, hideMarkerOnCollapse = TRUE )) %>% 
+                    addResetMapButton() 
             
-
+liquor_collegemap
 
 # Conclusions
 #From this mapping exercise we can refute our hypothesis that 
 #the best selling stores will be near college campuses. It appears the 
 #more likely explanation is that the best selling store tend to be 
 #located in larger population centers near major roads and receive more 
-#customer traffic. Consider adding radius to colleges.
+#customer traffic. Use the map to explore spatial relationships and possible correlations
+# between the top two selling brands (Hawkeye Vodka and Black Velvet)and other phenomena
+# that may result in high sales of these two particular products.
+  
+  
 
 

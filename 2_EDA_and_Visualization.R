@@ -22,8 +22,8 @@ glimpse(retail_cleaned)
 
 
 county_mostsales<-retail_cleaned %>% 
-  group_by(County) %>% 
-  summarize(countywise_sales = sum(Sale_Dollars)/1000000) %>% 
+  group_by(County)%>% 
+  summarise(countywise_sales = sum(Sale_Dollars)/1000000) %>% 
   arrange(desc(countywise_sales))
 
 ## Identify Top 10 Counties

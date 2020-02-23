@@ -18,7 +18,7 @@ colleges. Some colleges tend to be large consumers of alcohol.
 2.  What are the top 10 most valuable products in terms of sales?
 3.  What are the most popular liqour brands?
 4.  What is the spatial distirubtion of top selling locations of the top
-    2 selling brands?
+    two selling brands?
 5.  Are these stores located near college campuses?
 
 ### Contents
